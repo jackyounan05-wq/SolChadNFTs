@@ -7,7 +7,7 @@ from datetime import datetime
 import streamlit as st
 import plotly.graph_objects as go
 
-class EliteAISwarmV22:
+class EliteAISwarmV22_1:
     def __init__(self):
         self.exchange = ccxt.binance({'enableRateLimit': True})
         self.top_pairs = []
@@ -16,17 +16,17 @@ class EliteAISwarmV22:
         self.portfolio_value = 10000.0
         self.is_running = False
         self.data_cache = {}
-        self.agent_weights = {'ta':1.1, 'mtf':1.5, 'ob':1.3, 'vol':1.4, 'mom':1.2, 'regime':1.0}
-        self.adaptation_threshold = 0.78   # Lowered for activity
+        self.agent_weights = {'ta':1.1, 'mtf':1.4, 'ob':1.2, 'vol':1.3, 'mom':1.1, 'regime':1.0}
+        self.adaptation_threshold = 0.72   # Lowered significantly for activity
 
     def update_pairs(self):
         if self.top_pairs: return
         try:
             tickers = self.exchange.fetch_tickers()
             usdt = {k: v for k, v in tickers.items() if k.endswith('/USDT')}
-            self.top_pairs = [t[0] for t in sorted(usdt.items(), key=lambda x: x[1].get('quoteVolume', 0), reverse=True)[:12]]
+            self.top_pairs = [t[0] for t in sorted(usdt.items(), key=lambda x: x[1].get('quoteVolume', 0), reverse=True)[:15]]
         except:
-            self.top_pairs = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT']
+            self.top_pairs = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'XRP/USDT']
 
     def fetch_ohlcv(self, symbol, timeframe='15m', limit=200):
         key = f"{symbol}_{timeframe}"
@@ -55,7 +55,7 @@ class EliteAISwarmV22:
         }
 
         total = sum(votes[k] * self.agent_weights.get(k, 1.0) for k in votes)
-        conf = min(abs(total) * 6.8, 96)
+        conf = min(abs(total) * 6.5, 95)
         return total, conf, votes
 
     def ta_agent(self, df):
@@ -64,19 +64,19 @@ class EliteAISwarmV22:
         gain = delta.where(delta > 0, 0).rolling(14).mean()
         loss = -delta.where(delta < 0, 0).rolling(14).mean()
         rsi = 100 - (100 / (1 + gain / loss))
-        return 4 if rsi.iloc[-1] < 35 else -4 if rsi.iloc[-1] > 65 else 0
+        return 4 if rsi.iloc[-1] < 38 else -4 if rsi.iloc[-1] > 62 else 0   # More lenient
 
     def mtf_agent(self, df):
         ema50 = df['close'].ewm(span=50).mean().iloc[-1]
         ema200 = df['close'].ewm(span=200).mean().iloc[-1]
-        return 5 if ema50 > ema200 else -4
+        return 4.5 if ema50 > ema200 else -3.5
 
     def orderbook_agent(self, symbol):
         try:
             book = self.exchange.fetch_order_book(symbol, 10)
             bids = sum(float(x[1]) for x in book['bids'])
             asks = sum(float(x[1]) for x in book['asks'])
-            return (bids - asks) / (bids + asks + 1e-8) * 2.8
+            return (bids - asks) / (bids + asks + 1e-8) * 2.5
         except:
             return 0
 
@@ -87,26 +87,26 @@ class EliteAISwarmV22:
             if df.empty: return 0
             buy = df[df.get('side') == 'buy']['amount'].sum()
             sell = df[df.get('side') == 'sell']['amount'].sum()
-            return (buy - sell) / (buy + sell + 1e-8) * 2.6
+            return (buy - sell) / (buy + sell + 1e-8) * 2.4
         except:
             return 0
 
     def momentum_agent(self, df):
-        return df['close'].pct_change().rolling(7).sum().iloc[-1] * 80
+        return df['close'].pct_change().rolling(7).sum().iloc[-1] * 70
 
     def regime_agent(self, df):
         atr_pct = (df['high'] - df['low']).rolling(14).mean().iloc[-1] / df['close'].iloc[-1]
-        return -2 if atr_pct > 0.03 else 1.5
+        return -2 if atr_pct > 0.035 else 1.8
 
     def scan_once(self):
         self.update_pairs()
         new_signals = []
         status = st.empty()
-        status.info("🔄 Scanning top coins...")
+        status.info(f"🔄 Scanning {len(self.top_pairs)} coins...")
 
         for symbol in self.top_pairs:
             total, conf, votes = self.systematic_scan(symbol)
-            if conf >= 75 and abs(total) > 8.0:   # Lowered for activity
+            if conf >= 68 and abs(total) > 6.5:   # Much more active now
                 side = "LONG" if total > 0 else "SHORT"
                 df = self.fetch_ohlcv(symbol)
                 price = df['close'].iloc[-1]
@@ -120,20 +120,23 @@ class EliteAISwarmV22:
                 new_signals.append(signal)
                 st.success(f"**{side} {symbol.replace('/USDT','')}** @ ${price:.4f} | Conf {conf}%")
 
-        status.success(f"✅ Scan Complete — Found {len(new_signals)} signals")
+        if new_signals:
+            status.success(f"✅ Found {len(new_signals)} strong signals!")
+        else:
+            status.warning("No strong signals this scan. Market might be quiet or ranging.")
         return new_signals
 
     def run_web(self):
-        st.set_page_config(page_title="Elite AI Swarm v22", layout="wide")
-        st.title("🌌 ELITE AI SWARM v22 — High Win-Rate Machine")
-        st.caption("12-Agent Systematic Swarm • Self-Learning • Live Signals")
+        st.set_page_config(page_title="Elite AI Swarm v22.1", layout="wide")
+        st.title("🌌 ELITE AI SWARM v22.1 — High Win-Rate Machine")
+        st.caption("Fixed & Activated • More Responsive • Self-Learning")
 
         with st.sidebar:
             if st.button("▶️ START SWARM" if not self.is_running else "⏹️ STOP", type="primary"):
                 self.is_running = not self.is_running
                 if self.is_running:
                     threading.Thread(target=self.background_scanner, daemon=True).start()
-                    st.success("Swarm Activated!")
+                    st.success("Swarm is running!")
 
             st.metric("Portfolio", f"${self.portfolio_value:,.0f}")
 
@@ -154,13 +157,13 @@ class EliteAISwarmV22:
                     fig = go.Figure(data=[go.Candlestick(x=df['timestamp'], open=df['open'], high=df['high'], low=df['low'], close=df['close'])])
                     st.plotly_chart(fig, use_container_width=True)
 
-        st.caption("v22 Fixed & Active • Click 'Run Elite Systematic Scan' to see signals")
+        st.caption("v22.1 • Now active • Click 'Run Elite Systematic Scan' multiple times if needed")
 
     def background_scanner(self):
         while self.is_running:
             self.scan_once()
-            time.sleep(300)  # 5 minutes for testing
+            time.sleep(300)  # 5 minutes
 
 if __name__ == "__main__":
-    app = EliteAISwarmV22()
+    app = EliteAISwarmV22_1()
     app.run_web()
