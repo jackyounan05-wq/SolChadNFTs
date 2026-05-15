@@ -1,5 +1,5 @@
-ccxt
-pandas
-numpy
-streamlit
+ccxt 
+pandas 
+numpy 
+streamlit 
 plotly
