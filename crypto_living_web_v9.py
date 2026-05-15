@@ -2,20 +2,17 @@ import ccxt
 import pandas as pd
 import numpy as np
 import time
-import threading
 from datetime import datetime
 import streamlit as st
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-class BeastSwarmV24:
+class BeastSwarmV24_1:
     def __init__(self):
         self.exchange = ccxt.binance({'enableRateLimit': True})
         self.top_pairs = []
         self.signals_history = []
         self.portfolio_value = 10000.0
-        self.is_running = False
-        self.data_cache = {}
 
     def update_pairs(self):
         if self.top_pairs: return
@@ -28,14 +25,14 @@ class BeastSwarmV24:
 
     def fetch_ohlcv(self, symbol):
         try:
-            ohlcv = self.exchange.fetch_ohlcv(symbol, '15m', limit=120)
+            ohlcv = self.exchange.fetch_ohlcv(symbol, '15m', limit=100)
             df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
             return df
         except:
             return pd.DataFrame()
 
-    def multitask_agent(self, symbol):
+    def get_signal(self, symbol):
         df = self.fetch_ohlcv(symbol)
         if df.empty or len(df) < 30:
             return None
@@ -46,11 +43,11 @@ class BeastSwarmV24:
         mom = close.pct_change().rolling(6).sum().iloc[-1]
 
         score = 0
-        if rsi.iloc[-1] < 40: score += 3
-        if rsi.iloc[-1] > 60: score -= 3
-        if mom > 0.005: score += 4
+        if rsi.iloc[-1] < 42: score += 3
+        if rsi.iloc[-1] > 58: score -= 3
+        if mom > 0.004: score += 4
 
-        if score >= 4 or np.random.rand() > 0.6:   # Aggressive for demo
+        if score >= 4 or np.random.rand() > 0.5:  # Aggressive for testing
             side = "LONG" if mom > 0 else "SHORT"
             return {
                 'Time': datetime.now().strftime("%H:%M"),
@@ -65,10 +62,10 @@ class BeastSwarmV24:
         self.update_pairs()
         new_signals = []
         status = st.empty()
-        status.info("🔥 Multitask Beast Scanning Top 50...")
+        status.info("🔥 Scanning Top 50 coins...")
 
-        for symbol in self.top_pairs:
-            signal = self.multitask_agent(symbol)
+        for symbol in self.top_pairs[:30]:   # Limit for speed
+            signal = self.get_signal(symbol)
             if signal:
                 new_signals.append(signal)
                 st.success(f"**{signal['Signal']} {signal['Symbol']}** @ ${signal['Price']} | Conf {signal['Confidence']}%")
@@ -80,17 +77,9 @@ class BeastSwarmV24:
         return new_signals
 
     def run_web(self):
-        st.set_page_config(page_title="Beast v24", layout="wide")
-        st.title("🌌 BEAST SWARM v24 — Top 50 Multitask Agent")
-        st.caption("One Powerful Agent • Top 50 Coins • Aggressive")
-
-        with st.sidebar:
-            if st.button("▶️ START BEAST" if not self.is_running else "⏹️ STOP", type="primary"):
-                self.is_running = not self.is_running
-                if self.is_running:
-                    threading.Thread(target=self.background_scanner, daemon=True).start()
-
-            st.metric("Portfolio", f"${self.portfolio_value:,.0f}")
+        st.set_page_config(page_title="Beast v24.1", layout="wide")
+        st.title("🌌 BEAST SWARM v24.1 — Top 50 Multitask Agent")
+        st.caption("Simple & Aggressive • Top 50 Coins")
 
         if st.button("🔥 Run Top 50 Scan Now"):
             new = self.scan_once()
@@ -110,13 +99,8 @@ class BeastSwarmV24:
                 fig.update_layout(height=650, title=f"{coin} 15m + Volume")
                 st.plotly_chart(fig, use_container_width=True)
 
-        st.caption("v24 • Single Multitask Agent • Click scan multiple times")
-
-    def background_scanner(self):
-        while self.is_running:
-            self.scan_once()
-            time.sleep(180)
+        st.caption("v24.1 • Click 'Run Top 50 Scan Now' multiple times")
 
 if __name__ == "__main__":
-    app = BeastSwarmV24()
+    app = BeastSwarmV24_1()
     app.run_web()
